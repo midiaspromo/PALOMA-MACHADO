@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Build tools are required to compile better-sqlite3.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+    && apt-get install -y --no-install-recommends python3 make g++ curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
@@ -25,6 +25,6 @@ USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD curl -fsS http://127.0.0.1:3000/healthz || exit 1
 
 CMD ["npm", "start"]
