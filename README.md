@@ -30,3 +30,17 @@ SQLite exige disco persistente. Recomendado Coolify/VPS com volume persistente m
 
 ## LGPD
 Antes de coletar contatos reais, publique aviso de privacidade com controlador, finalidade, retenção, canal de direitos e contato. Colete apenas dados necessários; mantenha consentimento explícito e permita exclusão. O quiz evita solicitar dados clínicos sensíveis.
+
+## Coolify — corrigir erro `open Dockerfile: no such file or directory`
+Este pacote agora inclui um `Dockerfile` na raiz da aplicação.
+
+No Coolify:
+1. Confirme que o Root Directory é `/` (raiz do repositório, onde estão `Dockerfile`, `package.json` e `server.js`).
+2. Build Pack: **Dockerfile**.
+3. Dockerfile Location: `./Dockerfile`.
+4. Exposed Port: `3000`.
+5. Crie um Persistent Storage/Volume montado em `/app/data`.
+6. Configure as variáveis do `.env.example` em Environment Variables no Coolify. Gere um `SESSION_SECRET` aleatório com pelo menos 32 caracteres.
+7. Configure o domínio e HTTPS, depois redeploy.
+
+Não coloque o conteúdo dentro de uma subpasta `nutrimatch/` no repositório, a menos que configure essa subpasta como Root Directory no Coolify.
