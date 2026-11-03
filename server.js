@@ -10,13 +10,24 @@ const username=process.env.ADMIN_USERNAME||"admin",initialPassword=process.env.A
 if(initialPassword.length<12)throw new Error("ADMIN_INITIAL_PASSWORD deve ter pelo menos 12 caracteres.");
 const exists=db.prepare("SELECT id FROM admins WHERE username=?").get(username);
 if(!exists)db.prepare("INSERT INTO admins(username,password_hash,must_change_password,created_at) VALUES(?,?,1,?)").run(username,bcrypt.hashSync(initialPassword,12),new Date().toISOString());
-if(!process.env.SESSION_SECRET||process.env.SESSION_SECRET.length<32)throw new Error("Defina SESSION_SECRET com pelo menos 32 caracteres no .env");
+let sessionSecret=String(process.env.SESSION_SECRET||"").trim();
+if(sessionSecret.length<32){
+  const secretFile=path.join(DATA_DIR,".session-secret");
+  try {
+    if(fs.existsSync(secretFile)) sessionSecret=fs.readFileSync(secretFile,"utf8").trim();
+    if(sessionSecret.length<32){
+      sessionSecret=crypto.randomBytes(48).toString("hex");
+      fs.writeFileSync(secretFile,sessionSecret,{mode:0o600});
+    }
+    console.warn("AVISO: SESSION_SECRET não configurado; usando chave persistente em DATA_DIR. Configure-a no Coolify.");
+  } catch(err) { console.error("Falha ao criar SESSION_SECRET persistente:",err); process.exit(1); }
+}
 app.set("trust proxy",process.env.TRUST_PROXY==="1"?1:false);
 app.use(helmet({contentSecurityPolicy:false}));
 app.use(express.json({limit:"30kb"}));
 app.use("/api/auth/login",rateLimit({windowMs:15*60*1000,limit:8,standardHeaders:true,legacyHeaders:false}));
 app.use("/api",rateLimit({windowMs:15*60*1000,limit:150}));
-app.use(session({store:new SQLiteStore({db:"sessions.sqlite",dir:DATA_DIR}),name:"nutrimatch.sid",secret:process.env.SESSION_SECRET,resave:false,saveUninitialized:false,cookie:{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"strict",maxAge:8*60*60*1000}}));
+app.use(session({store:new SQLiteStore({db:"sessions.sqlite",dir:DATA_DIR}),name:"nutrimatch.sid",secret:sessionSecret,resave:false,saveUninitialized:false,cookie:{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"strict",maxAge:8*60*60*1000}}));
 app.use(express.static(__dirname,{index:"index.html",dotfiles:"deny"}));
 app.get("/admin",(req,res)=>res.sendFile(path.join(__dirname,"admin.html")));
 function csrf(req,res,next){if(!req.session.csrf)req.session.csrf=crypto.randomBytes(32).toString("hex");next()}
@@ -31,5 +42,5 @@ const insert=db.prepare("INSERT INTO participants(name,phone,email,profile,profi
 app.post("/api/quiz",(req,res)=>{const b=req.body||{},name=String(b.name||"").trim().slice(0,120),phone=String(b.phone||"").replace(/[^\d+]/g,"").slice(0,25),email=String(b.email||"").trim().slice(0,180),profile=String(b.profile||"").trim().slice(0,100),profileKey=String(b.profileKey||"").trim().slice(0,50);if(!name||phone.replace(/\D/g,"").length<10||!profile||b.consent!==true)return res.status(400).json({error:"Nome, WhatsApp, perfil e consentimento são necessários."});const answers=Array.isArray(b.answers)?b.answers.slice(0,12).map(x=>Number.isInteger(x)?x:null):[];const consentText="Autorizo o armazenamento dos dados informados para receber contato sobre meu resultado e possível acompanhamento. Posso solicitar a exclusão.";const info=insert.run(name,phone,email,profile,profileKey,JSON.stringify(answers),1,consentText,new Date().toISOString());res.status(201).json({ok:true,id:info.lastInsertRowid})});
 app.get("/api/admin/participants",requireAdmin,(req,res)=>{const rows=db.prepare("SELECT id,name,phone,email,profile,answers_json,consent,created_at FROM participants ORDER BY id DESC LIMIT 3000").all();res.json(rows.map(r=>({...r,answers:JSON.parse(r.answers_json),answers_json:undefined})))});
 app.get("/api/admin/export.csv",requireAdmin,(req,res)=>{const rows=db.prepare("SELECT id,name,phone,email,profile,answers_json,consent,created_at FROM participants ORDER BY id DESC").all(),esc=v=>'"'+String(v??"").replace(/"/g,'""')+'"';const csv=["id,nome,whatsapp,email,perfil,respostas,consentimento,data",...rows.map(r=>[r.id,r.name,r.phone,r.email,r.profile,r.answers_json,r.consent?"Sim":"Não",r.created_at].map(esc).join(","))].join("\r\n");res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition",'attachment; filename="nutrimatch-participantes.csv"');res.send("\ufeff"+csv)});
-app.get("/api/health",(req,res)=>res.json({ok:true}));
-app.listen(PORT,()=>console.log(`NutriMatch em http://localhost:${PORT} — admin em /admin`));
+app.get("/api/health",(req,res)=>res.json({ok:true}));\napp.get("/healthz",(req,res)=>res.status(200).send("ok"));
+const server=app.listen(PORT,"0.0.0.0",()=>console.log(`NutriMatch iniciado na porta ${PORT}; painel em /admin`));\nserver.on("error",err=>{console.error("Falha ao iniciar servidor HTTP:",err);process.exit(1);});

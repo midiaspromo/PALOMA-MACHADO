@@ -44,3 +44,6 @@ No Coolify:
 7. Configure o domínio e HTTPS, depois redeploy.
 
 Não coloque o conteúdo dentro de uma subpasta `nutrimatch/` no repositório, a menos que configure essa subpasta como Root Directory no Coolify.
+
+## Fix Restarting
+Esta versão mantém uma SESSION_SECRET gerada em DATA_DIR se a variável não estiver configurada, evitando crash por variável ausente. Configure uma chave própria no Coolify e mantenha o volume persistente em /app/data. O servidor escuta em 0.0.0.0:3000 e oferece /healthz.
